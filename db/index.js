@@ -89,7 +89,8 @@ async function createPost({
   content,
   tags = [] // this is new
 }) {
-  try {
+  try { // the insert params just choose which columns the Values will be inserted into
+        // using the paramaterized queries i.e, ($1) is a security means to prevent sql injecting
     const { rows: [ post ] } = await client.query(`
       INSERT INTO posts("authorId", title, content) 
       VALUES($1, $2, $3)
@@ -188,7 +189,7 @@ async function getAllPosts() {
   }
 }
 
-async function createTags(tagList) {
+async function createTags(tagList) { //['bob', 'bett'y, 'boggot'p]
   if (tagList.length === 0) { 
     return; 
   }
@@ -196,6 +197,7 @@ async function createTags(tagList) {
   // need something like: $1), ($2), ($3 
   const insertValues = tagList.map(
     (_, index) => `$${index + 1}`).join('), (');
+    console.log('swag' ,insertValues);
   // then we can use: (${ insertValues }) in our string template
 
   // need something like $1, $2, $3
@@ -204,31 +206,20 @@ async function createTags(tagList) {
   // then we can use (${ selectValues }) in our string template
 
   try {
-    const { rows: tags } = await client.query(`
-      SELECT tags.*
-      FROM tags
-      JOIN post_tags ON tags.id=post_tags."tagId"
-      WHERE post_tags."postId"=$1;
-    `, [postId])
+    await client.query(`
+      INSERT INTO tags(name)
+      VALUES (${insertValues}) --($1), ($2)
+      ON CONFLICT (name) DO NOTHING;
+    `, tagList);
 
-    const { rows: [author] } = await client.query(`
-      SELECT id, username, name, location
-      FROM users
-      WHERE id=$1;
-    `, [post.authorId])
-    const { rows } = await client.query(`
-            INSERT INTO tags(name)
-            VALUES (${insertValues})
-            ON CONFLICT (name) DO NOTHING;
-              `);
-    const { rows } = await client.query(`
-            SELECT * FROM tags
-            WHERE name
-            IN (${selectValues});
-              `);
-              
-     const { rows } = await client.query(sqlSelect, tagList);
-     return rows
+   const { rows } = await client.query(`
+    SELECT * FROM tags
+    WHERE name
+    IN (${selectValues});
+      `, tagList);
+              // is using react router better than using middleware routing?
+
+    return rows
    
   } catch (error) {
     throw error;
@@ -237,10 +228,10 @@ async function createTags(tagList) {
 async function createPostTag(postId, tagId) {
   try {
     await client.query(`
-      INSERT INTO post_tags("postId", "tagId")
+      INSERT INTO post_tags("tagId", "postId")
       VALUES ($1, $2)
-      ON CONFLICT ("postId", "tagId") DO NOTHING;
-    `, [postId, tagId]);
+      ON CONFLICT ("tagId", "postId") DO NOTHING;
+    `, [tagId, postId]);
   } catch (error) {
     throw error;
   }
@@ -273,6 +264,7 @@ async function getPostById(postId) {
     delete post.authorId;
 
     return post;
+    
   } catch (error) {
     throw error;
   }
